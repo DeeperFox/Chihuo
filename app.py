@@ -17,7 +17,7 @@ import time
 
 app = Flask(__name__)
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SECRET_KEY'] = 'kawa!fdtp'
 # SMTP服务器地址，例如QQ邮箱的smtp.qq.com
 app.config['MAIL_SERVER'] = 'smtp.qq.com'
 # SMTP服务器端口，SSL为465
@@ -194,6 +194,10 @@ def follow(email1, email2):
     uid = db.find("select id from user where user_name= %s and my_follow= %s", [email1], [email2])
     if id:
         db.delete("delete from follow where id=%s", [uid])
+        a = db.find("select my_fans from fans_count where user_name=%s", [email2])
+        db.update("update fans_count set my_fans=%s where user_name=%s", [a[0][0]-1], [email2])
+        b = db.find("select my_follow from fans_count where user_name=%s", [email1])
+        db.update("update fans_count set my_follow=%s where user_name=%s", [b[0][0] - 1], [email1])
         return jsonify({
             "data": {"user_name": "", "user_nick": ""},
             "message": "cancel follow",
@@ -202,6 +206,10 @@ def follow(email1, email2):
     else:
         id1 = uuid.uuid1()
         db.insert("follow", id1, email1, email2)
+        a = db.find("select my_fans from fans_count where user_name=%s", [email2])
+        db.update("update fans_count set my_fans=%s where user_name=%s", [a[0][0] + 1], [email2])
+        b = db.find("select my_follow from fans_count where user_name=%s", [email1])
+        db.update("update fans_count set my_follow=%s where user_name=%s", [b[0][0] + 1], [email1])
         return jsonify({
             "data": {"user_name": "", "user_nick": ""},
             "message": "follow success",
@@ -544,6 +552,40 @@ def store_food(uid):
         "message": "success",
         "code": 200
     })
+
+
+# 查看小瓶子
+@app.route('/<email>/check_bottle')
+@login_limit
+def check_bottle(email):
+    db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
+    tuple1 = db.find("select type,degree from bottle where user_name=%s", [email])
+    collect = list(tuple1)
+    j = 0
+    for i in collect:
+        collect[j] = list(i)
+        j += 1
+    return jsonify({
+        "data": collect,
+        "message": "success",
+        "code": 200
+    })
+
+
+# 设置小瓶子
+@app.route('/<email>/set_bottle', methods=['POST'])
+@login_limit
+def set_bottle(email):
+    if request.method == 'POST':
+        db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
+        list1 = request.files.getlist('bottle')
+        for i in list1:
+            db.insert("bottle", i["type"], i["degree"], email)
+        return jsonify({
+            "data": {"user_name": "", "user_nick": ""},
+            "message": "success",
+            "code": 200
+        })
 
 
 if __name__ == '__main__':
