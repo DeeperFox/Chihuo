@@ -60,10 +60,10 @@ class DbMysql:
             self.close_db()
 #删除操作
     def delete(self, sql, *args):
-        self.__execute_sql(sql, args)
+        self.__execute_sql(sql, *args)
 #更新操作
     def update(self, sql, *args):
-        self.__execute_sql(sql, args)
+        self.__execute_sql(sql, *args)
 
 	# 更新和删除操作类似，定义私有方法执行
     def __execute_sql(self, sql, *args):

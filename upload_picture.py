@@ -3,7 +3,7 @@ import json
 import requests
 
 def upload_picture(path):
-    url = 'https://sm.ms/api/v2/upload'
+    url = 'https://smms.app/api/v2/upload'
     files = {'smfile': open(path, 'rb')}
     headers = {
         "Authorization": "ji38IpIitpgY3m8DhUHpRM1n6FVb6ucn",
@@ -13,5 +13,9 @@ def upload_picture(path):
     }
     result = requests.post(url, headers=headers, files=files).json()
     json.dumps(result,indent=4)
-    return result['data']['url']
+    try:
+        return result["data"]["url"]
+    except:
+        print("已存在")
+        return result["images"]
 

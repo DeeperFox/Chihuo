@@ -45,13 +45,12 @@ def send_email():
                                      sender="1110923@qq.com", )
             msg.body = "您的验证码为：" + str(email_code)
             msg.recipients = [email_account]
-            session['email_code'] = email_code
-            session['email'] = email_account
             with app.app_context():
                 mail.send(msg)
-
+            db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
+            db.insert("email_code", email_code)
             return jsonify({
-                "data": {"email": session['email']},
+                "data": {"email": email_account},
                 "message": "success",
                 "code": 200
             })
@@ -64,10 +63,14 @@ def send_email():
 def verify_code():
     if request.method == 'POST':
         email_code = request.form.get('email_code')
-        email_code2 = session['email_code']
-        if email_code == email_code2:
+        print(email_code,type(email_code))
+        db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
+        email_code2 = db.find("select * from email_code")[0][0]
+        print(email_code2,type(email_code2))
+        if email_code == str(email_code2):
+            db.delete("delete from email_code where email_code=%s", [email_code2])
             return jsonify({
-                "data": {"email": session['email_account']},
+                "data": {"user_name": "", "user_nick": ""},
                 "message": "success",
                 "code": 200
             })
@@ -95,8 +98,8 @@ def register():
             else:
                 password = generate_password_hash(password1, method="pbkdf2:sha256", salt_length=8)
                 uid = uuid.uuid1()
-                db.insert("user", uid, user_name, password, user_nick, "NULL", "customer")
-
+                db.insert("user", uid, user_name, password, user_nick, "https://s2.loli.net/2022/08/03/2W9Nmf1SBpoRFdi.jpg", "customer")
+                db.insert("fans_count",user_name,0,0)
                 response = jsonify({
                     "data": {"user_name": user_name, "user_nick": user_nick},
                     "message": "OK",
@@ -122,11 +125,13 @@ def login():
             if str1 is None:
                 return bad_request("this user is not exist")
             if check_password_hash(str1[0][2], password):
+                head = db.find("select head from user where user_name=%s",user_name)
                 if str1[0][5] == "customer":
                     response = jsonify({"data": {
                         "user_name": user_name,
                         "user_nick": str1[0][3],
-                        "token": str(generate_token(user_name,"customer"), 'utf-8')
+                        "token": str(generate_token(user_name,"customer"), 'utf-8'),
+                        "head": head[0][0]
                     }, "message": 'OK', "code": 200}
                     )
                     response.status_code = 200
@@ -160,16 +165,16 @@ def change_password(email):
         else:
             new_password3 = generate_password_hash(new_password1, method="pbkdf2:sha256", salt_length=8)
             db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
-            db.update("update user set password=%s WHERE user_name=%s", [new_password3, email])
+            db.update("update user set password=%s WHERE user_name=%s", [new_password3], [email])
             return jsonify({
-                "data": {"user_name": "", "user_nick": ""},
+                "data": "",
                 "message": "success",
                 "code": 200
             })
 
 
 # 修改昵称
-@app.route('/<email>/change_nick', methods=['POST'])
+@app.route('/change_name/<email>', methods=['POST'])
 @login_limit
 def change_nick(email):
     if request.method == 'POST':
@@ -178,7 +183,7 @@ def change_nick(email):
             db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
             db.update("update user set user_nick=%s WHERE user_name=%s", [new_nick], [email])
             return jsonify({
-                "data": {"user_name": "", "user_nick": ""},
+                "data": "",
                 "message": "success",
                 "code": 200
             })
@@ -187,31 +192,42 @@ def change_nick(email):
 
 
 # 关注or取关
-@app.route('/<email1>/follow/<email2>')
+@app.route('/<email1>/<email2>')
 @login_limit
 def follow(email1, email2):
     db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
-    uid = db.find("select id from user where user_name= %s and my_follow= %s", [email1], [email2])
-    if id:
-        db.delete("delete from follow where id=%s", [uid])
+    uid = db.find("select id from follow where user_name= %s and my_follow= %s", [email1], [email2])
+    if uid:
+        print("yes")
+        db.delete("delete from follow where id=%s", [uid[0][0]])
         a = db.find("select my_fans from fans_count where user_name=%s", [email2])
-        db.update("update fans_count set my_fans=%s where user_name=%s", [a[0][0]-1], [email2])
+        print(a)
+        a1 = a[0][0] - 1
+        db.update("update fans_count set my_fans=%s where user_name=%s", [a1], [email2])
+
         b = db.find("select my_follow from fans_count where user_name=%s", [email1])
-        db.update("update fans_count set my_follow=%s where user_name=%s", [b[0][0] - 1], [email1])
+        print(b)
+        b1 = b[0][0] - 1
+        db.update("update fans_count set my_follow=%s where user_name=%s", [b1], [email1])
         return jsonify({
-            "data": {"user_name": "", "user_nick": ""},
+            "data": "",
             "message": "cancel follow",
             "code": 200
         })
     else:
+        print("no")
         id1 = uuid.uuid1()
         db.insert("follow", id1, email1, email2)
         a = db.find("select my_fans from fans_count where user_name=%s", [email2])
-        db.update("update fans_count set my_fans=%s where user_name=%s", [a[0][0] + 1], [email2])
+        print(a,type(a))
+        a1 = a[0][0]+1
+        db.update("update fans_count set my_fans=%s where user_name=%s", [a1], [email2])
         b = db.find("select my_follow from fans_count where user_name=%s", [email1])
-        db.update("update fans_count set my_follow=%s where user_name=%s", [b[0][0] + 1], [email1])
+        b1 = b[0][0] + 1
+        print(b)
+        db.update("update fans_count set my_follow=%s where user_name=%s", [b1], [email1])
         return jsonify({
-            "data": {"user_name": "", "user_nick": ""},
+            "data": "",
             "message": "follow success",
             "code": 200
         })
@@ -223,18 +239,17 @@ def follow(email1, email2):
 def fans_count(email):
     db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
     a = db.find("select my_follow,my_fans from user where user_name= %s ", [email])
-    if a:
-        return jsonify({
-            "data": {"my_follow": a[0][0], "my_fans": a[0][1]},
-            "message": "success",
-            "code": 200
-        })
-    else:
-        return jsonify({
-            "data": {"my_follow": 0, "my_fans": 0},
-            "message": "success",
-            "code": 200
-        })
+    return jsonify({
+        "data": {"my_follow": a[0][0], "my_fans": a[0][1]},
+        "message": "success",
+        "code": 200
+    })
+    # else:
+    #     return jsonify({
+    #         "data": {"my_follow": 0, "my_fans": 0},
+    #         "message": "success",
+    #         "code": 200
+    #     })
 
 
 # 我的收藏（美食）
@@ -279,10 +294,14 @@ def store_collect(email):
 
 # 上传头像
 @app.route('/<email>/change_head', methods=['POST'])
+@login_limit
 def change_head(email):
+    print("change_head")
     if request.method == 'POST':
         file = request.files['file']
+        print(30)
         if file:
+            print(1)
             basepath = os.path.dirname(__file__)
             basepath = basepath.replace('\\', '/')
             print(basepath)
@@ -290,8 +309,10 @@ def change_head(email):
             print(path)
             file.save(path)
             url = upload_picture(path)
+            print(url)
             db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
-            db.update("update user set head=%s WHERE user_name=%s", [email])
+            db.update("update user set head = %s where user_name=%s",[url],[email])
+            print(2)
             return jsonify({
                 "data": {"url": url},
                 "message": "success",
@@ -306,7 +327,7 @@ def change_head(email):
 @login_limit
 def my_post(email):
     db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
-    tuple1 = db.find("select title,picture,time,grade,collect from posts where user_name=%s", [email])
+    tuple1 = db.find("select id,title,picture,time,grade,collect from posts where user_name=%s", [email])
     collect = list(tuple1)
     j = 0
     for i in collect:
@@ -360,10 +381,12 @@ def follow_post(email):
 @app.route('/post_detail/<uid>')
 @login_limit
 def post_detail(uid):
+    print(2)
     db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
     tuple1 = db.find(
-        "select user.user_nick,post.user_name,posts.title,posts.time,posts.grade,posts.collect,posts.detail from user inner join posts where user.user_name=posts.user_name and posts.id=%s",
+        "select user.user_nick,posts.user_name,posts.title,posts.time,posts.grade,posts.collect,posts.detail from user inner join posts where user.user_name=posts.user_name and posts.id=%s",
         [uid])
+    print(tuple1)
     collect = list(tuple1)
     j = 0
     for i in collect:
@@ -377,9 +400,9 @@ def post_detail(uid):
 
 
 # 查看帖子图片
-@app.route('/picture/<uid>')
+@app.route('/post_picture/<uid>')
 @login_limit
-def picture(uid):
+def post_picture(uid):
     db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
     tuple1 = db.find("select url from picture where target=%s", [uid])
     collect = list(tuple1)
@@ -398,34 +421,33 @@ def picture(uid):
 @app.route('/<email>/up_post', methods=['POST'])
 @login_limit
 def up_post(email):
-    global picture2
-    j = 1
-    title = request.form.get('title')
-    detail = request.form.get('detail')
-    pictures = request.files.getlist('file')
-    db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
-    id1 = db.find("select id from user where user_name=%s", [email])
-    for picture in pictures:
-        basepath = os.path.dirname(__file__)
-        basepath = basepath.replace('\\', '/')
-        print(basepath)
-        path = basepath + '/static/' + secure_filename(picture.filename)
-        print(path)
-        picture.save(path)
-        url = upload_picture(path)
-        uid = uuid.uuid1()
-        db.insert("picture", uid, 3, id1[0][0], url)
-        if j == 1:
-            picture2 = picture
-        j += 1
-    uid1 = uuid.uuid1()
-    time1 = time.time()
-    db.insert("posts", uid1, email, title, detail, 0, 0, time1, picture2)
-    return jsonify({
-            "data": {"user_name": "", "user_nick": ""},
-            "message": "success",
-            "code": 200
-        })
+    if request.method == 'POST':
+        global picture2
+        j = 1
+        title = request.form.get('title')
+        detail = request.form.get('detail')
+        pictures = request.files.getlist('file')
+        db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
+        id1 = db.find("select id from user where user_name=%s", [email])
+        uid1 = uuid.uuid1()
+        for picture in pictures:
+            basepath = os.path.dirname(__file__)
+            basepath = basepath.replace('\\', '/')
+            path = basepath + '/static/' + secure_filename(picture.filename)
+            picture.save(path)
+            url = upload_picture(path)
+            uid = uuid.uuid1()
+            db.insert("picture", uid, 3, uid1, url, time.time())
+            if j == 1:
+                picture2 = url
+            j += 1
+        time1 = time.time()
+        db.insert("posts", uid1, email, title, detail, 0, 0, time1, picture2, 1)
+        return jsonify({
+                "data": {"user_name": "", "user_nick": ""},
+                "message": "success",
+                "code": 200
+            })
 
 
 # 相关景点陈列
@@ -578,11 +600,10 @@ def check_bottle(email):
 def set_bottle(email):
     if request.method == 'POST':
         db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
-        list1 = request.files.getlist('bottle')
-        for i in list1:
-            db.insert("bottle", i["type"], i["degree"], email)
+        type1 = request.form.get("type")
+        degree = request.form.get("degree")
+        db.insert("bottle", type1, degree, email)
         return jsonify({
-            "data": {"user_name": "", "user_nick": ""},
             "message": "success",
             "code": 200
         })
