@@ -309,6 +309,7 @@ def change_head(email):
 @app.route('/<email>/my_post')
 @login_limit
 def my_post(email):
+    db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
     tuple1 = db.find("select id,title,picture,time,grade,collect from posts where user_name=%s", [email])
     collect = list(tuple1)
     j = 0
@@ -361,6 +362,7 @@ def follow_post(email):
 @app.route('/post_detail/<uid>')
 @login_limit
 def post_detail(uid):
+    db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
     print(2)
     tuple1 = db.find(
         "select user.user_nick,posts.user_name,posts.title,posts.time,posts.grade,posts.collect,posts.detail from user inner join posts where user.user_name=posts.user_name and posts.id=%s",
@@ -382,6 +384,7 @@ def post_detail(uid):
 @app.route('/post_picture/<uid>')
 @login_limit
 def post_picture(uid):
+    db = DbMysql(host="localhost", port=3306, user="root", passwd="123456", database="fdtp", charset="utf8")
     tuple1 = db.find("select url from picture where target=%s", [uid])
     collect = list(tuple1)
     j = 0
